@@ -4,10 +4,18 @@ Compare text embedding models across retrieval quality, inference speed, and mem
 
 ## Models
 
-| Key | Model | Role |
-|-----|-------|------|
-| `mpnet` | `sentence-transformers/all-mpnet-base-v2` | Baseline |
-| `bge-small` | `BAAI/bge-small-en-v1.5` | |
+| Key | Model | Backend | Role |
+|-----|-------|---------|------|
+| `mpnet` | `sentence-transformers/all-mpnet-base-v2` | sbert | Baseline |
+| `bge-small` | `BAAI/bge-small-en-v1.5` | sbert | |
+| `bge-small-fe` | `BAAI/bge-small-en-v1.5` | fastembed | |
+| `all-minilm-fe` | `sentence-transformers/all-MiniLM-L6-v2` | fastembed | |
+
+Three backends are supported:
+
+- **sbert** — [sentence-transformers](https://www.sbert.net/) (PyTorch). Default.
+- **fastembed** — [qdrant/fastembed](https://github.com/qdrant/fastembed) (ONNX Runtime). Lighter and often faster.
+- **gguf** — [llama-cpp-python](https://github.com/abetlen/llama-cpp-python) for quantised GGUF models.
 
 ## Setup
 
@@ -25,6 +33,9 @@ python bench.py
 
 # Specific models
 python bench.py --models mpnet bge-small
+
+# Compare the same model across backends
+python bench.py --models bge-small bge-small-fe
 
 # Skip expensive evals
 python bench.py --skip-quality
@@ -47,9 +58,17 @@ python bench.py --corpus-size 500 --batch-size 32 --num-runs 5
 Edit `models.py` and add an entry to `REGISTRY`:
 
 ```python
+# sentence-transformers backend (default)
 "e5-small": ModelConfig(
     name="e5-small-v2",
     model_id="intfloat/e5-small-v2",
+),
+
+# fastembed backend
+"e5-small-fe": ModelConfig(
+    name="e5-small-v2 (fastembed)",
+    model_id="intfloat/e5-small-v2",
+    backend="fastembed",
 ),
 ```
 
@@ -59,6 +78,7 @@ Edit `models.py` and add an entry to `REGISTRY`:
 embedding-bench/
 ├── bench.py           # CLI entry point
 ├── models.py          # Model registry
+├── wrapper.py         # Backend wrappers (sbert, fastembed, gguf)
 ├── corpus.py          # Sentence corpus builder
 ├── report.py          # Table formatting
 ├── evals/

@@ -3,3 +3,6 @@ torch
 datasets
 psutil
 tabulate
+fastembed
+numpy
+scipy

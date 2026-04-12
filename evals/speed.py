@@ -3,11 +3,9 @@ from __future__ import annotations
 import statistics
 import time
 
-from sentence_transformers import SentenceTransformer
-
 
 def evaluate_speed(
-    model: SentenceTransformer,
+    model,
     sentences: list[str],
     num_runs: int = 3,
     batch_size: int = 64,

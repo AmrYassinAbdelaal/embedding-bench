@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import argparse
 
-from sentence_transformers import SentenceTransformer
-
 from corpus import build_corpus
 from evals import evaluate_memory, evaluate_quality, evaluate_speed
 from models import REGISTRY
 from report import print_report
+from wrapper import load_model
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -49,21 +48,21 @@ def main(argv: list[str] | None = None) -> None:
 
         if not args.skip_quality:
             print("  Evaluating quality (STS Benchmark)...")
-            model = SentenceTransformer(cfg.model_id)
+            model = load_model(cfg)
             result["quality"] = evaluate_quality(model)
             print(f"  Quality: {result['quality']:.4f}")
             del model
 
         if not args.skip_speed and corpus is not None:
             print(f"  Evaluating speed ({args.num_runs} runs, {args.corpus_size} sentences)...")
-            model = SentenceTransformer(cfg.model_id)
+            model = load_model(cfg)
             result["speed"] = evaluate_speed(model, corpus, num_runs=args.num_runs, batch_size=args.batch_size)
             print(f"  Speed: {result['speed']['sentences_per_second']} sent/s")
             del model
 
         if not args.skip_memory and corpus is not None:
             print("  Evaluating memory (isolated subprocess)...")
-            result["memory_mb"] = evaluate_memory(cfg.model_id, corpus, batch_size=args.batch_size)
+            result["memory_mb"] = evaluate_memory(cfg.model_id, corpus, batch_size=args.batch_size, backend=cfg.backend)
             print(f"  Memory: {result['memory_mb']} MB")
 
         results.append(result)
