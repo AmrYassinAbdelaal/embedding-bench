@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import streamlit as st
 
+from datasets import load_dataset
+
 from corpus import build_corpus
 from dataset_config import DATASET_PRESETS, DatasetConfig
 from evals.quality import evaluate_quality
@@ -145,9 +147,28 @@ if run_speed:
     num_runs = st.sidebar.number_input("Speed runs", 1, 10, 3)
 
 st.sidebar.markdown("---")
+st.sidebar.markdown("**Cache**")
+_cache_c1, _cache_c2 = st.sidebar.columns(2)
+with _cache_c1:
+    if st.button("🗑️ Clear All", use_container_width=True,
+                 help="Clear cached models, datasets, and results"):
+        st.cache_resource.clear()
+        st.cache_data.clear()
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
+with _cache_c2:
+    if st.button("🔄 Results", use_container_width=True,
+                 help="Clear eval results but keep models loaded"):
+        st.cache_data.clear()
+        for key in ["results", "selected_datasets"]:
+            st.session_state.pop(key, None)
+        st.rerun()
+
+st.sidebar.markdown("---")
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Cached functions
 # ---------------------------------------------------------------------------
 
 @st.cache_resource(show_spinner="Loading model...")
@@ -155,6 +176,55 @@ def get_model(model_key: str):
     cfg = REGISTRY[model_key]
     return load_model(cfg)
 
+
+@st.cache_data(show_spinner="Loading dataset...", ttl=3600)
+def get_dataset(ds_name: str, ds_config: str | None, ds_split: str) -> dict:
+    """Cache the HF dataset download & parse. Returns a dict of lists."""
+    ds = load_dataset(ds_name, ds_config, split=ds_split)
+    return {col: list(ds[col]) for col in ds.column_names}
+
+
+@st.cache_data(show_spinner=False, ttl=3600)
+def cached_evaluate_quality(
+    _model,
+    model_key: str,
+    ds_name: str,
+    ds_config: str | None,
+    ds_split: str,
+    query_col: str,
+    passage_col: str,
+    score_col: str | None,
+    score_scale: float,
+    max_pairs: int | None,
+) -> dict[str, float]:
+    """Cache quality results keyed by (model, dataset, max_pairs).
+
+    The _model arg is excluded from the hash (underscore prefix).
+    model_key is used as a hashable stand-in.
+    """
+    ds_cfg = DatasetConfig(
+        name=ds_name, config=ds_config, split=ds_split,
+        query_col=query_col, passage_col=passage_col,
+        score_col=score_col, score_scale=score_scale,
+    )
+    return evaluate_quality(_model, ds_cfg, max_pairs=max_pairs)
+
+
+@st.cache_data(show_spinner="Building corpus...", ttl=3600)
+def cached_build_corpus(
+    size: int, ds_name: str, ds_config: str | None, ds_split: str,
+    query_col: str, passage_col: str,
+) -> list[str]:
+    ds_cfg = DatasetConfig(
+        name=ds_name, config=ds_config, split=ds_split,
+        query_col=query_col, passage_col=passage_col,
+    )
+    return build_corpus(size, ds_cfg)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 def flatten_result(r: dict) -> dict:
     flat = {"Model": r["name"]}
@@ -250,20 +320,34 @@ if run_btn:
                 step / total_steps,
                 text=f"Evaluating **{cfg.name}** on *{ds_key}*...",
             )
-            quality_results[ds_key] = evaluate_quality(model, ds_cfg, max_pairs=max_pairs)
+            quality_results[ds_key] = cached_evaluate_quality(
+                model, model_key,
+                ds_cfg.name, ds_cfg.config, ds_cfg.split,
+                ds_cfg.query_col, ds_cfg.passage_col,
+                ds_cfg.score_col, ds_cfg.score_scale,
+                max_pairs,
+            )
         result["quality"] = quality_results
 
         if run_speed:
             step += 1
             progress.progress(step / total_steps, text=f"Speed benchmark: **{cfg.name}**...")
-            corpus = build_corpus(corpus_size, ds_configs[0])
+            ds0 = ds_configs[0]
+            corpus = cached_build_corpus(
+                corpus_size, ds0.name, ds0.config, ds0.split,
+                ds0.query_col, ds0.passage_col,
+            )
             result["speed"] = evaluate_speed(model, corpus, num_runs=num_runs, batch_size=batch_size)
 
         if run_memory:
             step += 1
             progress.progress(step / total_steps, text=f"Memory benchmark: **{cfg.name}**...")
             from evals.memory import evaluate_memory
-            corpus = build_corpus(corpus_size, ds_configs[0])
+            ds0 = ds_configs[0]
+            corpus = cached_build_corpus(
+                corpus_size, ds0.name, ds0.config, ds0.split,
+                ds0.query_col, ds0.passage_col,
+            )
             result["memory_mb"] = evaluate_memory(
                 cfg.model_id, corpus, batch_size=batch_size, backend=cfg.backend,
             )
@@ -416,7 +500,7 @@ for ds_key in ds_keys:
         width = 0.18
         colors = ["#4C72B0", "#55A868", "#C44E52", "#8172B2"]
 
-        fig, ax = plt.subplots(figsize=(max(4, len(models) * 1.4), 2.6))
+        fig, ax = plt.subplots(figsize=(max(4, len(models) * 1.4), 3.0))
         style_chart(fig, ax)
         for i, (metric, color) in enumerate(zip(metric_names, colors)):
             values = [r.get("quality", {}).get(ds_key, {}).get(metric, 0) for r in results]
@@ -428,12 +512,14 @@ for ds_key in ds_keys:
                         f"{v:.2f}", ha="center", va="bottom", fontsize=6, color=CHART_TEXT)
         ax.set_ylabel("Score", fontsize=8)
         ax.set_title(f"Retrieval Quality — {ds_key}", fontsize=9, pad=8)
-        ax.set_ylim(0, 1.15)
+        ax.set_ylim(0, 1.12)
         ax.set_xticks(x)
         ax.set_xticklabels(models, rotation=30, ha="right", fontsize=7)
-        ax.legend(fontsize=6, ncol=4, loc="upper right",
+        ax.legend(fontsize=6, ncol=4, loc="upper center",
+                  bbox_to_anchor=(0.5, -0.22),
                   facecolor=CHART_BG, edgecolor="#444", labelcolor=CHART_TEXT)
         plt.tight_layout()
+        fig.subplots_adjust(bottom=0.28)
         st.pyplot(fig, use_container_width=False)
         plt.close(fig)
 
