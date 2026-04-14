@@ -1,3 +1,15 @@
+---
+title: Embedding Bench
+emoji: 📐
+colorFrom: blue
+colorTo: purple
+sdk: streamlit
+sdk_version: "1.56.0"
+app_file: app.py
+pinned: false
+license: mit
+---
+
 # embedding-bench
 
 Compare text embedding models across retrieval quality, inference speed, and memory footprint. Everything runs locally — no external API calls.
