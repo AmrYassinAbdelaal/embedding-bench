@@ -1,14 +1,15 @@
 ---
-title: Streamlit Template Space
+title: Embedding Bench
 emoji: 🚀
 colorFrom: red
 colorTo: red
 sdk: docker
 app_port: 8501
 tags:
-  - streamlit
+- streamlit
 pinned: false
-short_description: Streamlit template space
+short_description: 'Compare text embedding models across retrieval performance, '
+license: mit
 ---
 
 # Welcome to Streamlit!
