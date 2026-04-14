@@ -4,5 +4,6 @@ datasets
 psutil
 tabulate
 fastembed
+libembedding
 numpy
 scipy

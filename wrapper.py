@@ -51,10 +51,24 @@ class FastEmbedWrapper:
         return np.array(embeddings, dtype=np.float32)
 
 
-def load_model(cfg: ModelConfig) -> SBertWrapper | GGUFWrapper | FastEmbedWrapper:
+class LibEmbedWrapper:
+    """Wraps libembedding.TextEmbedding."""
+
+    def __init__(self, cfg: ModelConfig):
+        from libembedding import TextEmbedding
+        self._model = TextEmbedding(cfg.model_id)
+
+    def encode(self, sentences: list[str], batch_size: int = 64, **kwargs) -> np.ndarray:
+        embeddings = list(self._model.embed(sentences, batch_size=batch_size))
+        return np.array(embeddings, dtype=np.float32)
+
+
+def load_model(cfg: ModelConfig) -> SBertWrapper | GGUFWrapper | FastEmbedWrapper | LibEmbedWrapper:
     """Factory: returns the right wrapper for the model's backend."""
     if cfg.backend == "gguf":
         return GGUFWrapper(cfg)
     if cfg.backend == "fastembed":
         return FastEmbedWrapper(cfg)
+    if cfg.backend == "libembedding":
+        return LibEmbedWrapper(cfg)
     return SBertWrapper(cfg)

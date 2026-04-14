@@ -32,4 +32,14 @@ REGISTRY: dict[str, ModelConfig] = {
         model_id="sentence-transformers/all-MiniLM-L6-v2",
         backend="fastembed",
     ),
+    "bge-small-le": ModelConfig(
+        name="bge-small-en-v1.5 (libembedding)",
+        model_id="BAAI/bge-small-en-v1.5",
+        backend="libembedding",
+    ),
+    "all-minilm-le": ModelConfig(
+        name="all-MiniLM-L6-v2 (libembedding)",
+        model_id="sentence-transformers/all-MiniLM-L6-v2",
+        backend="libembedding",
+    ),
 }
