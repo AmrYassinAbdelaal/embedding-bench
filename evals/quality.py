@@ -61,8 +61,8 @@ def evaluate_quality(
         queries = queries[:max_pairs]
         passages = passages[:max_pairs]
 
-    emb_q = model.encode(queries)
-    emb_p = model.encode(passages)
+    emb_q = model.encode(queries, is_query=True)
+    emb_p = model.encode(passages, is_query=False)
 
     if ds_cfg.score_col is not None:
         # Scored mode: Spearman correlation
