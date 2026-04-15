@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import json
+from dataclasses import asdict, dataclass
+from pathlib import Path
 
 
 @dataclass
@@ -43,3 +45,34 @@ REGISTRY: dict[str, ModelConfig] = {
     #     backend="libembedding",
     # ),
 }
+
+VALID_BACKENDS = {"sbert", "fastembed", "libembedding", "gguf"}
+CUSTOM_MODELS_PATH = Path(__file__).parent / "custom_models.json"
+
+
+def register_model(key: str, config: ModelConfig) -> None:
+    if key in REGISTRY:
+        raise ValueError(f"Model key '{key}' already exists in registry")
+    if config.backend not in VALID_BACKENDS:
+        raise ValueError(f"Invalid backend '{config.backend}'. Must be one of: {VALID_BACKENDS}")
+    REGISTRY[key] = config
+
+
+def load_custom_models_from_file(path: Path = CUSTOM_MODELS_PATH) -> None:
+    if not path.exists():
+        return
+    with open(path) as f:
+        entries = json.load(f)
+    for key, fields in entries.items():
+        if key not in REGISTRY:
+            REGISTRY[key] = ModelConfig(**fields)
+
+
+def save_custom_model_to_file(key: str, config: ModelConfig, path: Path = CUSTOM_MODELS_PATH) -> None:
+    existing: dict = {}
+    if path.exists():
+        with open(path) as f:
+            existing = json.load(f)
+    existing[key] = asdict(config)
+    with open(path, "w") as f:
+        json.dump(existing, f, indent=2)

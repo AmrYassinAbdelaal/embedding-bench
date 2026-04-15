@@ -14,8 +14,17 @@ from corpus import build_corpus
 from dataset_config import DATASET_PRESETS, DatasetConfig
 from evals.quality import evaluate_quality
 from evals.speed import evaluate_speed
-from models import REGISTRY, ModelConfig
+from models import (
+    REGISTRY,
+    VALID_BACKENDS,
+    ModelConfig,
+    load_custom_models_from_file,
+    register_model,
+    save_custom_model_to_file,
+)
 from wrapper import load_model
+
+load_custom_models_from_file()
 
 # ---------------------------------------------------------------------------
 # Page config & custom CSS
@@ -113,6 +122,40 @@ selected_models = st.sidebar.multiselect(
     default=["mpnet", "bge-small"] if len(available_models) >= 2 else available_models[:1],
     label_visibility="collapsed",
 )
+
+with st.sidebar.expander("➕ Add Custom Model"):
+    with st.form("add_model_form", clear_on_submit=True):
+        new_key = st.text_input("Registry key", placeholder="my-model")
+        new_name = st.text_input("Display name", placeholder="My Custom Model")
+        new_model_id = st.text_input("HuggingFace model ID", placeholder="org/model-name")
+        new_backend = st.selectbox("Backend", sorted(VALID_BACKENDS))
+        new_gguf_file = st.text_input(
+            "GGUF filename (gguf backend only)", value="", placeholder="model.gguf"
+        )
+        new_is_baseline = st.checkbox("Mark as baseline", value=False)
+        new_persist = st.checkbox("Save to disk", value=False,
+                                  help="Persist to custom_models.json so it loads next session")
+        submitted = st.form_submit_button("Add Model", use_container_width=True)
+    if submitted:
+        if not new_key or not new_name or not new_model_id:
+            st.sidebar.error("Key, name, and model ID are required.")
+        elif new_backend == "gguf" and not new_gguf_file:
+            st.sidebar.error("GGUF filename is required for gguf backend.")
+        else:
+            cfg = ModelConfig(
+                name=new_name,
+                model_id=new_model_id,
+                is_baseline=new_is_baseline,
+                backend=new_backend,
+                gguf_file=new_gguf_file or None,
+            )
+            try:
+                register_model(new_key, cfg)
+                if new_persist:
+                    save_custom_model_to_file(new_key, cfg)
+                st.rerun()
+            except ValueError as e:
+                st.sidebar.error(str(e))
 
 st.sidebar.markdown("**Datasets**")
 available_datasets = list(DATASET_PRESETS.keys())

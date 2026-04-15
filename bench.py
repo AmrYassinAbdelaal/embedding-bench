@@ -5,7 +5,7 @@ import argparse
 from corpus import build_corpus
 from dataset_config import DATASET_PRESETS, DatasetConfig
 from evals import evaluate_memory, evaluate_quality, evaluate_speed
-from models import REGISTRY
+from models import REGISTRY, ModelConfig, load_custom_models_from_file, register_model
 from report import print_report
 from wrapper import load_model
 
@@ -18,9 +18,15 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--models",
         nargs="+",
-        default=list(REGISTRY.keys()),
-        choices=list(REGISTRY.keys()),
-        help="Models to benchmark (default: all)",
+        default=None,
+        help="Models to benchmark (default: all registered)",
+    )
+    parser.add_argument(
+        "--add-model",
+        action="append",
+        default=[],
+        metavar="KEY:NAME:MODEL_ID:BACKEND[:GGUF_FILE]",
+        help="Register a custom model. Can be repeated.",
     )
     parser.add_argument("--corpus-size", type=int, default=1000)
     parser.add_argument("--batch-size", type=int, default=64)
@@ -60,6 +66,28 @@ def main(argv: list[str] | None = None) -> None:
                         help="Save charts to a directory (e.g. ./results)")
 
     args = parser.parse_args(argv)
+
+    # Load persisted custom models and register any --add-model entries
+    load_custom_models_from_file()
+    for spec in args.add_model:
+        parts = spec.split(":")
+        if len(parts) < 4:
+            parser.error(f"--add-model requires KEY:NAME:MODEL_ID:BACKEND, got: {spec}")
+        key, name, model_id, backend = parts[0], parts[1], parts[2], parts[3]
+        gguf_file = parts[4] if len(parts) > 4 else None
+        try:
+            register_model(key, ModelConfig(
+                name=name, model_id=model_id, backend=backend, gguf_file=gguf_file,
+            ))
+        except ValueError as e:
+            parser.error(str(e))
+
+    if args.models is None:
+        args.models = list(REGISTRY.keys())
+    else:
+        for k in args.models:
+            if k not in REGISTRY:
+                parser.error(f"Unknown model key: '{k}'. Available: {list(REGISTRY.keys())}")
 
     # Build list of dataset configs
     if args.dataset:
