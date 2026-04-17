@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -14,6 +14,8 @@ class DatasetConfig:
     passage_col: str = "sentence2"
     score_col: str | None = "score"
     score_scale: float = 5.0
+    # Pre-loaded data (dict of column-name -> list). When set, skip HF download.
+    data: dict[str, list] | None = field(default=None, repr=False)
 
 
 DATASET_PRESETS: dict[str, DatasetConfig] = {

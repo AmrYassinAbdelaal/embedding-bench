@@ -7,5 +7,5 @@ fastembed
 libembedding
 numpy
 scipy
-matplotlib
+plotly
 streamlit

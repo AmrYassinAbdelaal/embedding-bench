@@ -12,22 +12,18 @@ license: mit
 
 # embedding-bench
 
-Compare text embedding models across retrieval quality, inference speed, and memory footprint. Everything runs locally — no external API calls.
+Compare text embedding models on quality, speed, and memory. Includes a Streamlit web UI and a CLI.
 
-## Models
+## Features
 
-| Key | Model | Backend | Role |
-|-----|-------|---------|------|
-| `mpnet` | `sentence-transformers/all-mpnet-base-v2` | sbert | Baseline |
-| `bge-small` | `BAAI/bge-small-en-v1.5` | sbert | |
-| `bge-small-fe` | `BAAI/bge-small-en-v1.5` | fastembed | |
-| `all-minilm-fe` | `sentence-transformers/all-MiniLM-L6-v2` | fastembed | |
-
-Three backends are supported:
-
-- **sbert** — [sentence-transformers](https://www.sbert.net/) (PyTorch). Default.
-- **fastembed** — [qdrant/fastembed](https://github.com/qdrant/fastembed) (ONNX Runtime). Lighter and often faster.
-- **gguf** — [llama-cpp-python](https://github.com/abetlen/llama-cpp-python) for quantised GGUF models.
+- **40+ pre-configured models** — sentence-transformers, BGE, E5, GTE, Nomic, Jina, Arctic, and more
+- **4 backends** — sbert (PyTorch), fastembed (ONNX), gguf (llama-cpp), libembedding
+- **7 built-in datasets** — STS Benchmark, Natural Questions, MS MARCO, SQuAD, TriviaQA, GooAQ, HotpotQA
+- **Custom datasets** — upload your own CSV/TSV or load any HuggingFace dataset
+- **Custom models** — add any HuggingFace embedding model from the UI
+- **11 retrieval metrics** — MRR, MAP@k, NDCG@k, Precision@k, Recall@k (all configurable)
+- **LLM as a Judge** — use OpenAI or Anthropic to rate retrieval relevance
+- **Interactive charts** — Plotly-powered, with hover, zoom, and PNG export
 
 ## Setup
 
@@ -37,9 +33,40 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Usage
+## Web UI
 
-### Basic
+```bash
+streamlit run app.py
+```
+
+The sidebar has three sections:
+
+1. **Models** — select from the registry or add a custom HuggingFace model
+2. **Datasets** — pick built-in presets, upload a CSV/TSV, or add any HuggingFace dataset
+3. **Evaluation** — configure metrics, speed/memory benchmarks, LLM judge, and max pairs
+
+### Custom datasets
+
+You can add datasets two ways from the sidebar:
+
+- **Upload file** — CSV or TSV (max 50 MB, 50k rows) with a query column and a passage column. Optionally include a numeric score column for Spearman correlation; otherwise retrieval metrics (MRR, Recall@k, etc.) are used.
+- **HuggingFace Hub** — provide the dataset ID (e.g. `mteb/stsbenchmark-sts`), config, split, and column names. The dataset is validated on add.
+
+### LLM as a Judge
+
+Enable in the Evaluation section. Provide your OpenAI or Anthropic API key. For each sampled query, the top-5 retrieved passages are rated for relevance (1–5) by the LLM. Reports judge_avg@1, judge_avg@5, and judge_nDCG@5.
+
+### Metrics
+
+| Dimension | Metrics | Method |
+|-----------|---------|--------|
+| Quality (scored) | Spearman | Cosine similarity vs gold scores |
+| Quality (pairs) | MRR, MAP@5/10, NDCG@5/10, Precision@1/5/10, Recall@1/5/10 | Retrieval ranking of positive passages |
+| LLM Judge | Avg@1, Avg@5, nDCG@5 | LLM relevance ratings on retrieved passages |
+| Speed | Median encode time, sent/s | Wall-clock over N runs with warmup |
+| Memory | Peak RSS delta (MB) | Isolated subprocess via `psutil` |
+
+## CLI
 
 ```bash
 # Full benchmark (quality + speed + memory)
@@ -48,78 +75,39 @@ python bench.py
 # Specific models
 python bench.py --models mpnet bge-small
 
-# Compare the same model across backends
+# Compare backends
 python bench.py --models bge-small bge-small-fe
 
 # Skip expensive evals
 python bench.py --skip-quality
 python bench.py --skip-memory
 
-# Tune corpus size and batch size
-python bench.py --corpus-size 500 --batch-size 32 --num-runs 5
-```
-
-### Datasets
-
-By default, quality is evaluated on the STS Benchmark. You can evaluate on multiple HuggingFace datasets using built-in presets:
-
-| Preset | HF Dataset | Type | Pairs |
-|--------|-----------|------|-------|
-| `sts` | `mteb/stsbenchmark-sts` | Scored (Spearman) | 1,379 |
-| `natural-questions` | `sentence-transformers/natural-questions` | Retrieval (MRR/Recall) | 100,231 |
-| `msmarco` | `sentence-transformers/msmarco-bm25` | Retrieval | 503,000 |
-| `squad` | `sentence-transformers/squad` | Retrieval | 87,599 |
-| `trivia-qa` | `sentence-transformers/trivia-qa` | Retrieval | 73,346 |
-| `gooaq` | `sentence-transformers/gooaq` | Retrieval | 3,012,496 |
-| `hotpotqa` | `sentence-transformers/hotpotqa` | Retrieval | 84,500 |
-
-```bash
-# Evaluate on multiple datasets
+# Multiple datasets with pair limit
 python bench.py --models mpnet bge-small \
   --datasets sts natural-questions squad \
-  --skip-speed --skip-memory
+  --max-pairs 1000 --skip-speed --skip-memory
 
-# Limit pairs for large datasets
-python bench.py --datasets msmarco gooaq --max-pairs 1000
-
-# Use a custom HF dataset (overrides --datasets)
+# Custom HF dataset
 python bench.py --dataset my-org/my-pairs \
   --query-col query --passage-col passage --score-col none
+
+# Export
+python bench.py --csv results.csv --charts ./results
 ```
 
-Scored datasets (with `--score-col`) report **Spearman correlation**. Pair-only datasets (`--score-col none`) report **MRR**, **Recall@1**, **Recall@5**, and **Recall@10**.
+### Built-in dataset presets
 
-### Export results
+| Preset | HF Dataset | Type |
+|--------|-----------|------|
+| `sts` | `mteb/stsbenchmark-sts` | Scored (Spearman) |
+| `natural-questions` | `sentence-transformers/natural-questions` | Retrieval |
+| `msmarco` | `sentence-transformers/msmarco-bm25` | Retrieval |
+| `squad` | `sentence-transformers/squad` | Retrieval |
+| `trivia-qa` | `sentence-transformers/trivia-qa` | Retrieval |
+| `gooaq` | `sentence-transformers/gooaq` | Retrieval |
+| `hotpotqa` | `sentence-transformers/hotpotqa` | Retrieval |
 
-```bash
-# Export to CSV
-python bench.py --csv results.csv
-
-# Save charts as PNG
-python bench.py --charts ./results
-
-# Both
-python bench.py --models mpnet bge-small \
-  --datasets sts squad natural-questions \
-  --max-pairs 1000 \
-  --csv results.csv --charts ./results
-```
-
-Charts generated:
-- `quality_<dataset>.png` — Spearman bar chart (scored) or grouped MRR/Recall bars (retrieval)
-- `speed.png` — sentences/second comparison
-- `memory.png` — peak memory usage comparison
-
-## Metrics
-
-| Dimension | Metric | Method |
-|-----------|--------|--------|
-| Quality (scored) | Spearman rho | Cosine similarity vs gold scores |
-| Quality (pairs) | MRR, Recall@k | Retrieval ranking of positive passages |
-| Speed | Median encode time | Wall-clock over N runs with warmup |
-| Memory | Peak RSS delta | Isolated subprocess via `psutil` |
-
-## CLI reference
+### CLI flags
 
 ```
 --models            Models to benchmark (default: all)
@@ -144,20 +132,14 @@ Charts generated:
 
 ## Adding a model
 
-Edit `models.py` and add an entry to `REGISTRY`:
+From the web UI, click **Add Custom Model** in the sidebar — just provide a display name and a HuggingFace model ID.
+
+Or edit `models.py` directly:
 
 ```python
-# sentence-transformers backend (default)
 "e5-small": ModelConfig(
     name="e5-small-v2",
     model_id="intfloat/e5-small-v2",
-),
-
-# fastembed backend
-"e5-small-fe": ModelConfig(
-    name="e5-small-v2 (fastembed)",
-    model_id="intfloat/e5-small-v2",
-    backend="fastembed",
 ),
 ```
 
@@ -165,15 +147,17 @@ Edit `models.py` and add an entry to `REGISTRY`:
 
 ```
 embedding-bench/
+├── app.py               # Streamlit web UI
 ├── bench.py             # CLI entry point
-├── models.py            # Model registry
-├── wrapper.py           # Backend wrappers (sbert, fastembed, gguf)
+├── models.py            # Model registry (40+ models)
+├── wrapper.py           # Backend wrappers (sbert, fastembed, gguf, libembedding)
 ├── corpus.py            # Sentence corpus builder
 ├── dataset_config.py    # Dataset presets and configuration
-├── report.py            # Table formatting, CSV export, charts
+├── report.py            # Table formatting, CSV export, charts (CLI)
 ├── evals/
-│   ├── quality.py       # STS + retrieval evaluation
+│   ├── quality.py       # Quality evaluation (Spearman + retrieval metrics)
 │   ├── speed.py         # Latency measurement
-│   └── memory.py        # Memory measurement
+│   ├── memory.py        # Memory measurement
+│   └── llm_judge.py     # LLM-as-a-Judge evaluation
 └── requirements.txt
 ```
