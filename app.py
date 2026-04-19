@@ -104,7 +104,7 @@ with col_title:
 with col_badge:
     st.markdown(
         "<div style='text-align:right; padding-top:18px;'>"
-        "<a href='https://github.com/amryassin/embedding-bench' target='_blank'>"
+        "<a href='https://github.com/amryassinabdelaal/embedding-bench' target='_blank'>"
         "<img src='https://img.shields.io/badge/GitHub-repo-blue?logo=github' /></a></div>",
         unsafe_allow_html=True,
     )
